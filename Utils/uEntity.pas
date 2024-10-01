@@ -46,15 +46,19 @@ type
   private
     FContexto: TRttiContext;
     FTypObj: TRttiType;
-    FStateMode: TModeState;
+    FStateMode: TStateMode;
     FCriteria: TCriteria;
+    FIsPersisted: Boolean;
+    FIsChange: Boolean;
   public
     constructor Create();
     destructor Destroy; override;
     property Contexto: TRttiContext read FContexto write FContexto;
     property TypObj: TRttiType read FTypObj write FTypObj;
-    property StateMode: TModeState read FStateMode write FStateMode;
+    property StateMode: TStateMode read FStateMode write FStateMode;
     property Criteria: TCriteria read FCriteria write FCriteria;
+    property IsPersisted: Boolean read FIsPersisted write FIsPersisted;
+    property IsChange: Boolean read FIsChange write FIsChange;
   end;
 
 implementation
@@ -65,7 +69,10 @@ implementation
 constructor TGenericEntity.Create;
 begin
   FContexto := TRttiContext.Create;
-  FCriteria := TCriteria.Create(nil)
+  FCriteria := TCriteria.Create(nil);
+  IsPersisted := False;
+  IsChange := True;
+  StateMode := smBrowse;
 end;
 
 destructor TGenericEntity.Destroy;

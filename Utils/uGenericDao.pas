@@ -369,7 +369,7 @@ end;
 // funções para manipular as entidades
 class function TGenericDAO.Save<T>(Obj: T): boolean;
 begin
-  if TGenericEntity(Obj).StateMode = msEdit then
+  if TGenericEntity(Obj).StateMode = smEdit then
     Update<T>(Obj)
   else
     Insert<T>(Obj);
@@ -478,6 +478,12 @@ begin
       begin
         for Prop in TypObj.GetProperties do
         begin
+          if Prop.Name = 'IsPersisted' then
+          begin
+            PropVal := True;
+            Prop.SetValue(TObject(Obj), PropVal);
+          end;
+
           for Atributo in Prop.GetAttributes do
           begin
             if (Atributo is FieldName) and (UpperCase(FieldName(Atributo).Name) = UpperCase(DataSet.Fields[I].FieldName)) then
@@ -500,6 +506,15 @@ begin
               Prop.SetValue(TObject(Obj), PropVal);
             end;
           end;
+        end;
+      end;
+      for Prop in TypObj.GetProperties do
+      begin
+        if Prop.Name = 'IsChange' then
+        begin
+          PropVal := False;
+          Prop.SetValue(TObject(Obj), PropVal);
+          Break;
         end;
       end;
       Result := True;

@@ -49,7 +49,6 @@ type
     property Visible: Boolean read FVisible write FVisible;
   end;
 
-
 implementation
 
 constructor TableName.Create(aName: String);

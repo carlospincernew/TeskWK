@@ -21,6 +21,10 @@ Type
     FDescProduto: string;
     function GetProduto: TProdutoModel;
     function GetDescProduto: string;
+    procedure SetQuantidade(const Value: Double);
+    procedure SetTotal(const Value: Double);
+    procedure SetUnitario(const Value: Double);
+    procedure SetIDPedido(const Value: Integer);
   public
     [KeyField('ID')]
     [FieldName('ID')]
@@ -33,16 +37,16 @@ Type
     property DescProduto: string read GetDescProduto write FDescProduto;
     [FieldName('id_pedido')]
     [DisplayLabel('Número Pedido', False, 70)]
-    property IDPedido: Integer read FIDPedido write FIDPedido;
+    property IDPedido: Integer read FIDPedido write SetIDPedido;
     [FieldName('Quantidade')]
     [DisplayLabel('Quantidade', True, 70)]
-    property Quantidade: Double read FQuantidade write FQuantidade;
+    property Quantidade: Double read FQuantidade write SetQuantidade;
     [FieldName('valor_unitario')]
     [DisplayLabel('Vlr Unitário', True, 90)]
-    property Unitario: Double read FUnitario write FUnitario;
+    property Unitario: Double read FUnitario write SetUnitario;
     [FieldName('valor_total')]
     [DisplayLabel('Vlr Total', True, 90)]
-    property Total: Double read FTotal write FTotal;
+    property Total: Double read FTotal write SetTotal;
     property Produto: TProdutoModel read GetProduto write FProduto;
   end;
 
@@ -60,6 +64,10 @@ Type
     FCliente: TClienteModel;
     function GetCliente: TClienteModel;
     function GetTotal: Double;
+    procedure SetData(const Value: TDate);
+    procedure SetIdCliente(const Value: Integer);
+    procedure SetTotal(const Value: Double);
+    procedure SetCodigo(const Value: Integer);
   public
     constructor Create();
     destructor Destroy; override;
@@ -67,16 +75,16 @@ Type
     [KeyField('ID')]
     [FieldName('ID')]
     [DisplayLabel('Código')]
-    property Codigo: Integer read FCodigo write FCodigo;
+    property Codigo: Integer read FCodigo write SetCodigo;
     [FieldName('id_cliente')]
     [DisplayLabel('Cód. Cliente')]
-    property IdCliente: Integer read FIdCliente write FIdCliente;
+    property IdCliente: Integer read FIdCliente write SetIdCliente;
     [FieldName('data_emissao', True, ftDate)]
     [DisplayLabel('Data')]
-    property Data: TDate read FData write FData;
+    property Data: TDate read FData write SetData;
     [FieldName('valor_total')]
     [DisplayLabel('Vlr Total')]
-    property Total: Double read GetTotal write FTotal;
+    property Total: Double read GetTotal write SetTotal;
     property Cliente: TClienteModel read GetCliente write FCliente;
     property PedidoProdutosList: TObjectList<TPedidoProdutosModel> read FPedidoProdutosList write FPedidoProdutosList;
   end;
@@ -105,6 +113,34 @@ begin
     TGenericDAO.Retrive(FProduto, IDProduto.ToString);
   end;
   Result := FProduto;
+end;
+
+procedure TPedidoProdutosModel.SetIDPedido(const Value: Integer);
+begin
+  if (IsPersisted) and (not IsChange) and (FIDPedido <> Value) then
+    StateMode := smInsert;
+  FIDPedido := Value;
+end;
+
+procedure TPedidoProdutosModel.SetQuantidade(const Value: Double);
+begin
+  if (IsPersisted) and (not IsChange) and (FQuantidade <> Value) then
+    StateMode := smEdit;
+  FQuantidade := Value;
+end;
+
+procedure TPedidoProdutosModel.SetTotal(const Value: Double);
+begin
+  if (IsPersisted) and (not IsChange) and (FTotal <> Value) then
+    StateMode := smEdit;
+  FTotal := Value;
+end;
+
+procedure TPedidoProdutosModel.SetUnitario(const Value: Double);
+begin
+  if (IsPersisted) and (not IsChange) and (FUnitario <> Value) then
+    StateMode := smEdit;
+  FUnitario := Value;
 end;
 
 { TPedido }
@@ -138,7 +174,7 @@ var
   I: Integer;
 begin
   FTotal := 0;
-  for I := 0 to FPedidoProdutosList.Count -1 do
+  for I := 0 to FPedidoProdutosList.Count - 1 do
   begin
     FTotal := FTotal + FPedidoProdutosList[I].Total;
   end;
@@ -165,6 +201,7 @@ begin
     for I := 0 to DataSet.FieldCount - 1 do
     begin
       Prop := TGenericDAO.GetProp(FPedidoProdutosList[Index], DataSet.Fields[I].FieldName);
+
       for Atributo in Prop.GetAttributes do
       begin
         if (Atributo is FieldName) then
@@ -188,9 +225,53 @@ begin
         end;
       end;
     end;
+    TypObj := Contexto.GetType(FPedidoProdutosList[Index].ClassInfo);
+    for Prop in TypObj.GetProperties do
+    begin
+      if Prop.Name = 'IsPersisted' then
+      begin
+        PropVal := True;
+        Prop.SetValue(FPedidoProdutosList[Index], PropVal);
+        Continue;
+      end;
+      if Prop.Name = 'IsChange' then
+      begin
+        PropVal := False;
+        Prop.SetValue(FPedidoProdutosList[Index], PropVal);
+        Break;
+      end;
+    end;
     inc(Index);
     DataSet.Next;
   end;
+end;
+
+procedure TPedidoModel.SetCodigo(const Value: Integer);
+begin
+  if (IsPersisted) and (not IsChange) and (FCodigo <> Value) then
+    StateMode := smInsert;
+  FCodigo := Value;
+end;
+
+procedure TPedidoModel.SetData(const Value: TDate);
+begin
+  if (IsPersisted) and (not IsChange) and (FData <> Value) then
+    StateMode := smEdit;
+  FData := Value;
+end;
+
+procedure TPedidoModel.SetIdCliente(const Value: Integer);
+begin
+  if (IsPersisted) and (not IsChange) and (FIdCliente <> Value) then
+    StateMode := smEdit;
+  FIdCliente := Value;
+end;
+
+procedure TPedidoModel.SetTotal(const Value: Double);
+begin
+  if (IsPersisted) and (not IsChange) and (FTotal <> Value) then
+    StateMode := smEdit;
+  FTotal := Value;
 end;
 
 end.

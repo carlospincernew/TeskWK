@@ -28,8 +28,8 @@ type
     function Save(): boolean;
     function Delete(ANumPed: Integer): boolean;
     function DeletePedidoProduto(APedidoProdutos: TPedidoProdutosModel): boolean;
-    function Update(APedidoProdutos: TPedidoProdutosModel): boolean;
     procedure Cancel();
+    procedure Clear;
     procedure AddPedidoProduto(APedidoProdutos: TPedidoProdutosModel);
     function LocateCadastro(ATipoConsulta: TConsulta; AValue: Integer): TObject;
     property TotalPedido: Double read GetTotalPedido write FTotalPedido;
@@ -52,36 +52,18 @@ begin
 
   DM.WKConexao.StartTransaction;
   try
-    TGenericDAO.Save(FPedidoModel);
+    if FPedidoModel.StateMode in [smInsert, smEdit] then
+      TGenericDAO.Save(FPedidoModel);
+
     for PedidoProdutos in FPedidoModel.PedidoProdutosList do
     begin
-      TGenericDAO.Save(PedidoProdutos);
+      case PedidoProdutos.StateMode of
+        smInsert, smEdit: TGenericDAO.Save(PedidoProdutos);
+        smDeleted: TGenericDAO.Delete(PedidoProdutos);
+      end;
     end;
     DM.WKConexao.Commit;
-    FPedidoModel.StateMode := msBrowse;
-    Result := True;
-  except
-    on e: Exception do
-    begin
-      DM.WKConexao.Rollback;
-    end;
-  end;
-end;
-
-function TPedidoControl.Update(APedidoProdutos: TPedidoProdutosModel): boolean;
-begin
-  Result := false;
-  DM.WKConexao.StartTransaction;
-  try
-    APedidoProdutos.StateMode := msEdit;
-    TGenericDAO.Save(APedidoProdutos);
-    FPedidoModel.LoadPedidoProdutosList;
-    FPedidoModel.Total := TotalPedido;
-    TGenericDAO.Save(FPedidoModel);
-
-    DM.WKConexao.Commit;
-    FPedidoModel.StateMode := msBrowse;
-    APedidoProdutos.StateMode := msBrowse;
+    FPedidoModel.StateMode := smBrowse;
     Result := True;
   except
     on e: Exception do
@@ -95,7 +77,7 @@ procedure TPedidoControl.AddPedidoProduto(APedidoProdutos: TPedidoProdutosModel)
 begin
   if FPedidoModel.Codigo = 0 then
   begin
-    FPedidoModel.StateMode := msInsert;
+    FPedidoModel.StateMode := smInsert;
     FPedidoModel.Codigo := TGenericDAO.GetLastID(FPedidoModel);
   end;
   if (APedidoProdutos.IDProduto = 0) then
@@ -105,6 +87,7 @@ begin
     raise Exception.Create('Quantidade não imformado');
 
   APedidoProdutos.IDPedido := FPedidoModel.Codigo;
+  APedidoProdutos.StateMode := smInsert;
   FPedidoModel.PedidoProdutosList.Add(APedidoProdutos);
   TotalPedido := FPedidoModel.Total;
   if FGridPedProd <> nil then
@@ -132,6 +115,9 @@ begin
   iRow := 1;
   for PedidoProdutos in FPedidoModel.PedidoProdutosList do
   begin
+    if PedidoProdutos.StateMode = smDeleted then
+      Continue;
+
     TypObj := FContexto.GetType(PedidoProdutos.ClassInfo);
     iCol := 0;
     FGridPedProd.Objects[iCol, iRow] := PedidoProdutos;
@@ -158,6 +144,12 @@ begin
     inc(iRow);
     FGridPedProd.RowCount := iRow;
   end;
+end;
+
+procedure TPedidoControl.Clear;
+begin
+  FPedidoModel.PedidoProdutosList.Clear;
+  TGenericDAO.Clear(FPedidoModel);
 end;
 
 constructor TPedidoControl.Create(APedido: TPedidoModel; AGrid: TStringGrid);
@@ -205,20 +197,19 @@ begin
 end;
 
 function TPedidoControl.DeletePedidoProduto(APedidoProdutos: TPedidoProdutosModel): boolean;
+var
+  PedidoProdutos: TPedidoProdutosModel;
 begin
   Result := False;
-  DM.WKConexao.StartTransaction;
-  try
-    if APedidoProdutos <> nil then
+  if APedidoProdutos <> nil then
+  begin
+    for PedidoProdutos in FPedidoModel.PedidoProdutosList do
     begin
-      Result := TGenericDAO.Delete(APedidoProdutos);
-    end;
-    FPedidoModel.LoadPedidoProdutosList;
-    DM.WKConexao.Commit;
-  except
-    on e: Exception do
-    begin
-      DM.WKConexao.Rollback;
+      if PedidoProdutos.Codigo = APedidoProdutos.Codigo then
+      begin
+        PedidoProdutos.StateMode := smDeleted;
+        Break;
+      end;
     end;
   end;
 end;
@@ -233,6 +224,7 @@ function TPedidoControl.GetTotalPedido: Double;
 var
   I: Integer;
 begin
+  FTotalPedido := 0;
   for I := 0 to FPedidoModel.PedidoProdutosList.Count - 1 do
     FTotalPedido := FTotalPedido + FPedidoModel.PedidoProdutosList[I].Total;
 
@@ -303,9 +295,12 @@ end;
 
 function TPedidoControl.LocatePedido(ACodigo: Integer): TPedidoModel;
 begin
-  TGenericDAO.Retrive(FPedidoModel, ACodigo.ToString);
-  FPedidoModel.LoadPedidoProdutosList;
-  Result := FPedidoModel;
+  Result := nil;
+  if TGenericDAO.Retrive(FPedidoModel, ACodigo.ToString) then
+  begin
+    FPedidoModel.LoadPedidoProdutosList;
+    Result := FPedidoModel;
+  end;
 end;
 
 end.

@@ -152,9 +152,9 @@ object FrmPedido: TFrmPedido
       ExplicitHeight = 23
     end
     object btnCancelarPedido: TButton
-      Left = 330
-      Top = 6
-      Width = 153
+      Left = 411
+      Top = 5
+      Width = 110
       Height = 33
       Cursor = crHandPoint
       Caption = 'CANCELAR PEDIDO'
@@ -162,15 +162,25 @@ object FrmPedido: TFrmPedido
       OnClick = btnCancelarPedidoClick
     end
     object BtnGravarPedido: TButton
-      Left = 488
-      Top = 6
-      Width = 153
+      Left = 527
+      Top = 5
+      Width = 110
       Height = 33
       Cursor = crHandPoint
       Caption = 'GRAVAR PEDIDO'
       Enabled = False
       TabOrder = 1
       OnClick = BtnGravarPedidoClick
+    end
+    object btnNovoPedido: TButton
+      Left = 295
+      Top = 5
+      Width = 110
+      Height = 33
+      Cursor = crHandPoint
+      Caption = 'NOVO PEDIDO'
+      TabOrder = 2
+      OnClick = btnNovoPedidoClick
     end
   end
   object Panel2: TPanel
@@ -288,6 +298,7 @@ object FrmPedido: TFrmPedido
       Height = 21
       TabStop = False
       TabOrder = 2
+      OnChange = OnChange
     end
     object edtCodigoPedido: TEdit
       Left = 12

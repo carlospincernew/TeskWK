@@ -40,6 +40,7 @@ type
     Label7: TLabel;
     Label8: TLabel;
     edtDataPedido: TDateTimePicker;
+    btnNovoPedido: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -56,17 +57,22 @@ type
       Shift: TShiftState);
     procedure GridPedProdSelectCell(Sender: TObject; ACol, ARow: Integer;
       var CanSelect: Boolean);
+    procedure btnNovoPedidoClick(Sender: TObject);
   private
     PedidoProdutos: TPedidoProdutosModel;
     FPedidoControl: TPedidoControl;
     FPedidoModel: TPedidoModel;
     FRow: Integer;
+    FPedidoStateMode: TStateMode;
     { Private declarations }
     procedure AddProduto;
+    procedure EditProduto;
     procedure MappFrmToObj;
     procedure MappObjToFrm(AEdicao: Boolean);
     procedure ClearForm;
     procedure ClearProduto;
+    procedure CarregaPedido(ANumPedido: Integer);
+    procedure CtrlTela;
   public
     { Public declarations }
   end;
@@ -84,89 +90,144 @@ uses udmConnection, printers;
 
 procedure TFrmPedido.AddProduto;
 begin
-  if FPedidoModel.StateMode <> msEdit then
+  FPedidoStateMode := smInsert;
+
+  if (FPedidoModel.IsPersisted) then
   begin
-    PedidoProdutos := TPedidoProdutosModel.Create;
-    MappFrmToObj;
-    try
-      FPedidoControl.AddPedidoProduto(PedidoProdutos);
-      BtnGravarPedido.Enabled := (FPedidoModel.StateMode in [msEdit, msInsert]);
-      ClearProduto;
-      lbTotalPedido.Caption := 'Total Pedido: ' + FormatFloat('###,##0.00', FPedidoControl.TotalPedido);
-      edtCodigoPedido.Text := PedidoProdutos.IDPedido.ToString;
-      edtCodProduto.SetFocus;
-    except
-      on E: exception do
-      begin
-        MessageDlg(E.Message, mtWarning, [mbOK], 0);
-        PedidoProdutos.Free;
-      end;
-    end;
-  end
-  else begin
-    MappFrmToObj;
-    FPedidoControl.Update(PedidoProdutos);
-    MappObjToFrm(false);
+    FPedidoStateMode := smEdit;
+    CtrlTela;
   end;
+
+  PedidoProdutos := TPedidoProdutosModel.Create;
+  MappFrmToObj;
+  try
+    FPedidoControl.AddPedidoProduto(PedidoProdutos);
+
+    ClearProduto;
+
+    if StrToIntDef(edtCodigoPedido.Text, 0) > 0 then
+      edtCodigoPedido.Text := PedidoProdutos.IDPedido.ToString;
+
+    edtCodProduto.SetFocus;
+    BtnGravarPedido.Enabled := True;
+    MappObjToFrm(False);
+  except
+    on E: exception do
+    begin
+      MessageDlg(E.Message, mtWarning, [mbOK], 0);
+      PedidoProdutos.Free;
+    end;
+  end;
+end;
+
+procedure TFrmPedido.EditProduto;
+begin
+  FPedidoStateMode := smEdit;
+  MappFrmToObj;
+  FPedidoModel.Total := FPedidoControl.TotalPedido;
+  MappObjToFrm(false);
+  BtnGravarPedido.Enabled := true;
 end;
 
 procedure TFrmPedido.btnAdicionarClick(Sender: TObject);
 begin
-  AddProduto;
+  if edtCodProduto.ReadOnly then
+    EditProduto
+  else
+    AddProduto;
+end;
+
+procedure TFrmPedido.CarregaPedido(ANumPedido: Integer);
+begin
+  if ANumPedido = 0 then
+    exit;
+
+  FPedidoModel := TPedidoModel(FPedidoControl.LocateCadastro(csPedido, ANumPedido));
+  if (FPedidoModel <> nil) and (FPedidoModel.Codigo > 0) then
+  begin
+    MappObjToFrm(false);
+  end
+  else begin
+    MessageDlg('Pedido não localizado', mtWarning, [mbOK], 0);
+    ClearForm;
+  end;
 end;
 
 procedure TFrmPedido.BtnBuscarPedidoClick(Sender: TObject);
 begin
-  if edtNumeroPedido.Text = EmptyStr then
-    exit;
-
-  FPedidoModel := TPedidoModel(FPedidoControl.LocateCadastro(csPedido, StrToIntDef(edtNumeroPedido.Text, 0)));
-  if (FPedidoModel <> nil) and (FPedidoModel.Codigo > 0) then
-    MappObjToFrm(false)
-  else
-    MessageDlg('Pedido não localizado', mtWarning, [mbOK], 0);
+  if FPedidoStateMode = smBrowse then
+    CarregaPedido(StrToIntDef(edtNumeroPedido.Text, 0));
 end;
 
 procedure TFrmPedido.btnCancelarPedidoClick(Sender: TObject);
 var
   NumPed: string;
 begin
-  if (StrToIntDef(edtCodigoPedido.Text, 0) = 0) or ((StrToIntDef(edtCodigoPedido.Text, 0) > 0) and (FPedidoModel.StateMode in [msEdit, msBrowse])) then
-  begin
-    if (StrToIntDef(edtCodigoPedido.Text, 0) = 0) then
-      NumPed := InputBox('Cancelamento de Pedido', 'Número Pedido:', '')
-    else
-      NumPed := edtCodigoPedido.Text;
+  if StrToUIntDef(edtCodigoPedido.Text, 0) = 0 then
+    exit;
 
-    if (StrToIntDef(NumPed, 0) > 0) and (MessageDlg('Deseja cancelar o pedido ' + NumPed + '?', mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
-    begin
-      if FPedidoControl.Delete(StrToIntDef(NumPed, 0)) then
+  case FPedidoStateMode of
+    smBrowse:
       begin
-        MessageDlg('Pedido deletado com sucesso!', mtInformation, [mbOK], 0);
-        ClearForm;
+        if (StrToIntDef(edtCodigoPedido.Text, 0) = 0) then
+          NumPed := InputBox('Cancelamento de Pedido', 'Número Pedido:', '')
+        else
+          NumPed := edtCodigoPedido.Text;
+
+        if (StrToIntDef(NumPed, 0) > 0) and (MessageDlg('Deseja cancelar o pedido ' + NumPed + '?', mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
+        begin
+          if FPedidoControl.Delete(StrToIntDef(NumPed, 0)) then
+          begin
+            MessageDlg('Pedido deletado com sucesso!', mtInformation, [mbOK], 0);
+            ClearForm;
+            FPedidoStateMode := smBrowse;
+          end;
+        end;
       end;
-    end;
-  end
-  else
-    if FPedidoModel.StateMode = msInsert then
-    begin
-      FPedidoControl.Cancel;
-      ClearForm;
-      FPedidoControl.ChangeGrid();
-    end;
+    smInsert:
+      begin
+        if (MessageDlg('Deseja cancelar o pedido ' + NumPed + '?', mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
+        begin
+          FPedidoControl.Cancel;
+          ClearForm;
+          FPedidoControl.ChangeGrid();
+          FPedidoStateMode := smBrowse;
+        end;
+      end;
+    smEdit:
+      begin
+        if (MessageDlg('Deseja cancelar a edição do pedido ' + edtCodigoPedido.Text + '?', mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
+        begin
+          CarregaPedido(StrToIntDef(edtCodigoPedido.Text, 0));
+          FPedidoModel.StateMode := smBrowse;
+          FPedidoStateMode := smBrowse;
+        end;
+      end;
+  end;
+  CtrlTela;
 end;
 
 procedure TFrmPedido.BtnGravarPedidoClick(Sender: TObject);
 begin
   try
     if FPedidoControl.Save then
+    begin
       MessageDlg('Pedido salvo com sucesso!', mtInformation, [mbOK], 0);
+      BtnGravarPedido.Enabled := false;
+      FPedidoStateMode := smBrowse;
+    end;
   except
     on E: exception do
     begin
       MessageDlg(E.Message, mtError, [mbOK], 0);
     end;
   end;
+end;
+
+procedure TFrmPedido.btnNovoPedidoClick(Sender: TObject);
+begin
+  FPedidoControl.Clear;
+  ClearForm;
 end;
 
 procedure TFrmPedido.ClearForm;
@@ -181,6 +242,11 @@ begin
   edtNumeroPedido.Text := EmptyStr;
 
   edtDataPedido.SetFocus;
+  FPedidoStateMode := smBrowse;
+  lbTotalPedido.Caption := 'Total Pedido: 0,00';
+
+  FPedidoControl.LoadGrid;
+  CtrlTela;
 end;
 
 procedure TFrmPedido.ClearProduto;
@@ -190,6 +256,20 @@ begin
   edtUnitario.Text := '0,00';
   edtTotal.Text := '0,00';
   edtDescricao.Text := EmptyStr;
+end;
+
+procedure TFrmPedido.CtrlTela;
+begin
+  edtCodProduto.ReadOnly := false;
+  edtCodProduto.Color := clWindow;
+  btnAdicionar.Caption := 'ADICIONAR';
+  btnCancelarPedido.Caption := 'CANCELAR PEDIDO';
+  if FPedidoStateMode = smEdit then
+  begin
+    btnCancelarPedido.Caption := 'CANCELAR EDIÇÃO';
+  end;
+  BtnGravarPedido.Enabled := FPedidoStateMode in [smEdit, smInsert];
+  btnNovoPedido.Enabled := not (FPedidoStateMode in [smEdit, smInsert]);
 end;
 
 procedure TFrmPedido.OnChangeDecimal(Sender: TObject);
@@ -256,7 +336,9 @@ begin
     begin
       PedidoProdutos := TPedidoProdutosModel(GridPedProd.Objects[0, FRow]);
       FPedidoControl.DeletePedidoProduto(PedidoProdutos);
-      MappObjToFrm(False);
+      MappObjToFrm(false);
+      FPedidoStateMode := smEdit;
+      CtrlTela;
     end;
   end;
 end;
@@ -277,7 +359,7 @@ begin
   PedidoProdutos.IDProduto := StrToIntDef(edtCodProduto.Text, 0);
   PedidoProdutos.Quantidade := StrToFloatDef(edtQtd.Text, 0);
   PedidoProdutos.Unitario := StrToFloatDef(edtUnitario.Text, 0);
-  PedidoProdutos.Total := StrToFloatDef(edtTotal.Text, 0);
+  PedidoProdutos.Total := PedidoProdutos.Quantidade * PedidoProdutos.Unitario;
 end;
 
 procedure TFrmPedido.MappObjToFrm(AEdicao: Boolean);
@@ -287,9 +369,6 @@ begin
   edtDataPedido.Date := FPedidoModel.Data;
   edtNomeCliente.Text := FPedidoModel.Cliente.Nome;
 
-  edtCodProduto.ReadOnly := false;
-  edtCodProduto.Color := clWindow;
-  btnAdicionar.Caption := 'Adicionar';
   if AEdicao then
   begin
     edtCodProduto.ReadOnly := True;
@@ -299,9 +378,9 @@ begin
     edtUnitario.Text := PedidoProdutos.Unitario.ToString;
     edtTotal.Text := PedidoProdutos.Total.ToString;
     edtDescricao.Text := PedidoProdutos.Produto.Descricao;
-    FPedidoModel.StateMode := msEdit;
     edtCodProduto.SetFocus;
-    btnAdicionar.Caption := 'Alterar';
+    btnAdicionar.Caption := 'ALTERAR ITEM';
+    btnCancelarPedido.Caption := 'CANCELAR EDIÇÃO';
   end
   else begin
     FRow := 0;
@@ -309,6 +388,7 @@ begin
     ClearProduto;
   end;
   lbTotalPedido.Caption := 'Total Pedido: ' + FormatFloat('###,##0.00', FPedidoModel.Total);
+  CtrlTela;
 end;
 
 procedure TFrmPedido.OnLocateObj(Sender: TObject);
